@@ -1,89 +1,144 @@
 # Detecting the Emerging ClickFix Win+X Terminal-Paste Phishing Variant with Wazuh SIEM
 
-A Cyber Range Fusion Center detection use case for the ClickFix social engineering pattern in which a user is instructed to open a terminal from the Windows Win+X menu and paste clipboard content. A Windows endpoint monitor records the paste event, and Wazuh collects the resulting Windows Application log for analyst review.
+**Cyber Range Fusion Center | Windows endpoint detection → Windows Event Log → Wazuh SIEM**
 
-> **Scope:** This project documents a lab detection of the Win+X → terminal → Ctrl+V workflow. A paste alert is a behavioral signal, not proof that a command executed or that the host was compromised.
+This lab reproduces the user-interaction stage of a ClickFix-style lure: the user is directed to open a terminal through **Win+X → I** and paste clipboard content. A C# endpoint monitor scores the pasted text and writes suspicious terminal-paste observations to the Windows **Application** log as **Event ID 2001**. The Wazuh agent collects the event, and the alert appears in the Wazuh dashboard.
 
-## Detection flow
+> The monitor observes a paste into a supported terminal process. It does **not** independently record the Win+X keystroke or prove that the pasted content ran. Screenshots document the lab workflow; Event ID 2001 means a suspicious *pre-execution paste*.
 
-```text
-ClickFix-style instruction → Win+X terminal launch → Ctrl+V paste
-    → endpoint monitor → Windows Application Event ID 2001
-    → Wazuh agent → Wazuh manager/dashboard alert → analyst review
-```
+## Repository map
+
+| Path | Purpose |
+| --- | --- |
+| [`src/ClickFixWinXMonitor/Program.cs`](src/ClickFixWinXMonitor/Program.cs) | Original endpoint monitor source supplied during this lab |
+| [`src/ClickFixWinXMonitor/ClickFixWinXMonitor.csproj`](src/ClickFixWinXMonitor/ClickFixWinXMonitor.csproj) | .NET 8 Windows project and EventLog dependency |
+| [`config/wazuh-agent-ossec-fragment.xml`](config/wazuh-agent-ossec-fragment.xml) | Application event-channel collection block for the Windows agent |
+| [`evidence/`](evidence/) | Six screenshots of the monitor, Event Viewer, and Wazuh |
 
 ## Lab environment
 
-| Component | Lab configuration |
+| Item | Value |
 | --- | --- |
-| Endpoint | Windows 11 Pro, `DESKTOP-EC88LQC` |
-| Wazuh endpoint agent | Agent ID `002` |
-| Manager | `sifat` |
-| Endpoint monitor | .NET 8 Windows console application |
-| Event source | Custom Windows Application event |
-| Event ID | `2001` |
+| Windows endpoint | Windows 11 Pro, `DESKTOP-EC88LQC` (`10.0.2.15` in the lab) |
+| Wazuh agent | `002` |
+| Wazuh manager | `sifat` |
+| Monitor | C# / .NET 8, `System.Diagnostics.EventLog` 8.0.1 |
+| Event source / channel / ID | `ClickFixWinXMonitor` / `Application` / `2001` |
+| Detection phase | Terminal paste before execution |
 
-The agent was developed under `C:\ClickFixWinXAgent\ClickFixWinXMonitor` with `System.Diagnostics.EventLog` version `8.0.1`. The published target was `win-x64`, self-contained.
+## Step 1 — Prepare the Windows monitor project
 
-## What was verified
+On the Windows test endpoint, open **PowerShell as Administrator** and create the project directory:
 
-1. A user opened a terminal through Win+X and pasted test clipboard content with Ctrl+V.
-2. The endpoint monitor generated Windows Application Event ID `2001` for the paste action, with context about the target process.
-3. Wazuh agent `002` forwarded the event to the manager.
-4. A corresponding Wazuh alert was visible in the dashboard.
+```powershell
+New-Item -ItemType Directory -Force -Path C:\ClickFixWinXAgent\ClickFixWinXMonitor
+Set-Location C:\ClickFixWinXAgent\ClickFixWinXMonitor
+dotnet new console --framework net8.0
+dotnet add package System.Diagnostics.EventLog --version 8.0.1
+```
 
-The monitor was exercised with command-like text and numeric clipboard content. The event reports the observed paste; an analyst must assess the content and surrounding process activity. The exact published `Program.cs` and Wazuh configuration/rule XML should be added from the lab artifacts so the repository can serve as a reproducible implementation.
+Replace the generated `Program.cs` and project file with the two files from [`src/ClickFixWinXMonitor/`](src/ClickFixWinXMonitor/). The project targets `net8.0-windows` and enables Windows Forms for clipboard access. The source is the uploaded lab snapshot; the project file expresses its required target and package.
 
-## Reproduction outline
+Register the custom Windows event source once with elevated PowerShell:
 
-1. Build and publish the Windows monitor on the test endpoint:
-   ```powershell
-   dotnet publish -c Release -r win-x64 --self-contained true
-   ```
-2. Start the published monitor from `bin\Release\net8.0-windows\win-x64\publish`.
-3. Confirm the Wazuh agent is active and collecting the relevant Windows Application events.
-4. Use harmless test clipboard text. Press Win+X, open the terminal, and paste with Ctrl+V. Do not execute untrusted clipboard content.
-5. Check Event Viewer → Windows Logs → Application for Event ID `2001`.
-6. Search the Wazuh dashboard for the same event and confirm the endpoint agent and timestamp.
+```powershell
+if (-not [System.Diagnostics.EventLog]::SourceExists('ClickFixWinXMonitor')) {
+    New-EventLog -LogName Application -Source ClickFixWinXMonitor
+}
+```
 
-## Detection evidence
+## Step 2 — Build, publish, and start the monitor
 
-The following screenshots are from the lab test. They show the endpoint observation, Event Viewer entry, and Wazuh alert. Some frames also contain a test command; do not execute clipboard content from screenshots.
+```powershell
+Set-Location C:\ClickFixWinXAgent\ClickFixWinXMonitor
+dotnet publish -c Release -r win-x64 --self-contained true
+Set-Location .\bin\Release\net8.0-windows\win-x64\publish
+.\ClickFixWinXMonitor.exe
+```
 
-| Step | Screenshot |
+The monitor prints its running status, Event ID `2001`, minimum risk score `2`, numeric range **2–15 digits**, and supported paste shortcuts **Ctrl+V** and **Shift+Insert**. It checks the foreground process against Windows Terminal, PowerShell, pwsh, cmd, and conhost.
+
+**Build evidence:** ![Successful publish output](evidence/monitor-build-success.png)
+
+## Step 3 — Reproduce a harmless terminal-paste test
+
+1. Copy harmless test text such as `cmd /c echo ClickFix-Test`. The string scores `2` through the monitor's `cmd /c` indicator. **Copy only; do not run the command.**
+2. Press **Win+X → I** to open the terminal on the test endpoint.
+3. With the monitor still running, press **Ctrl+V** in the terminal. Do not press Enter.
+4. Observe the monitor's suspicious terminal-paste message, including target process, paste method, risk score, and matched indicator.
+
+The original lab screenshot used a command-like sample with `iex` and a download/execution-chain indicator. Treat that pictured command as evidence only; never run it.
+
+![Monitor output during a terminal paste](evidence/terminal-paste-monitor.png)
+
+[Additional monitor detection screenshot](evidence/endpoint-monitor-detection.png)
+
+The code also detects 2–15 digit clipboard-only values, possible encoded PowerShell, download plus execution patterns, and simple obfuscation indicators. A match is a triage signal; an analyst must review false positives.
+
+## Step 4 — Verify the Windows Application event
+
+Open **Event Viewer → Windows Logs → Application** and filter for **Event ID 2001** or source `ClickFixWinXMonitor`. Open a matching warning and inspect the target process, paste method, detection stage, reason, risk score, timestamp, and host. The event message also records a truncated clipboard preview and SHA-256 hash, so avoid putting secrets in the clipboard during testing.
+
+![Application Event ID 2001 in Event Viewer](evidence/windows-event-viewer-2001.png)
+
+The pictured event shows `WindowsTerminal`, `Ctrl+V`, `Pre-Execution Paste`, and a `HIGH` risk score of `7`.
+
+## Step 5 — Configure Wazuh agent collection
+
+On the Windows endpoint, add the [Application event-channel block](config/wazuh-agent-ossec-fragment.xml) **inside the existing** `<ossec_config>` element of:
+
+```text
+C:\Program Files (x86)\ossec-agent\ossec.conf
+```
+
+Then restart and verify the agent:
+
+```powershell
+Restart-Service -Name wazuh
+Get-Service -Name wazuh
+```
+
+The fragment in this repository is a collection example that matches the observed `Application` channel. Preserve the endpoint's other localfile entries. The exact full `ossec.conf` from the lab was not retained here.
+
+## Step 6 — Verify the Wazuh alert
+
+In the Wazuh dashboard, search the alert events for endpoint agent `002`, Event ID `2001`, or provider `ClickFixWinXMonitor`. Open the document and verify:
+
+- `agent.name`: `DESKTOP-EC88LQC`
+- `data.win.system.channel`: `Application`
+- `data.win.system.eventID`: `2001`
+- `data.win.system.providerName`: `ClickFixWinXMonitor`
+- `data.win.eventdata.data`: monitor's detection message
+
+![Wazuh alert overview](evidence/wazuh-alerts-overview.png)
+
+| Detailed evidence | What it shows |
 | --- | --- |
-| Endpoint monitor detects a terminal paste | [Monitor detection](evidence/endpoint-monitor-detection.png) |
-| Terminal and monitor together | [Terminal paste](evidence/terminal-paste-monitor.png) |
-| Windows Application Event ID 2001 | [Event Viewer](evidence/windows-event-viewer-2001.png) |
-| Alert appears in Wazuh | [Wazuh alerts overview](evidence/wazuh-alerts-overview.png) |
-| Wazuh agent and event fields | [Wazuh document details](evidence/wazuh-alert-document-details.png) |
-| Additional Wazuh event fields | [Wazuh alert fields](evidence/wazuh-alert-fields.png) |
+| [Wazuh document details](evidence/wazuh-alert-document-details.png) | Agent `002`, host, Application channel, Event ID `2001`, message |
+| [Wazuh alert fields](evidence/wazuh-alert-fields.png) | Provider `ClickFixWinXMonitor`, warning severity, event-channel decoder |
 
-### Endpoint detection
+The dashboard screenshots show a matching alert. The exact lab-side custom Wazuh rule XML is **not available**, so this repository does not claim a reproducible custom rule ID.
 
-![Terminal paste detected by the endpoint monitor](evidence/terminal-paste-monitor.png)
+## Detection logic and boundaries
 
-### Windows Event Viewer
+```text
+Win+X → terminal → paste
+                   ↓
+           foreground terminal check
+                   ↓
+        clipboard indicator scoring (minimum 2)
+                   ↓
+       Windows Application Event ID 2001
+                   ↓
+          Wazuh agent → SIEM alert
+```
 
-![Windows Application Event ID 2001](evidence/windows-event-viewer-2001.png)
+- The C# monitor polls paste key combinations and inspects text on the clipboard when a listed terminal is foreground. It does not continuously alert on every clipboard change.
+- Risk levels in the source are `MEDIUM` (score 2–4), `HIGH` (5–7), and `CRITICAL` (8+). Below score 2, it logs no Event ID 2001.
+- A pasted command is **not** proof of execution, persistence, download, or compromise. Correlate with process creation, PowerShell logging, and network telemetry before making those claims.
+- Clipboard previews can contain sensitive text. Use synthetic test data and review event retention and access before using this monitor outside the lab.
+- This is a lab snapshot. No Windows build was run from this repository in the current environment; the included screenshot shows the successful build on the test host.
 
-### Wazuh SIEM alert
+## Outcome
 
-![ClickFix paste alert in Wazuh](evidence/wazuh-alerts-overview.png)
-
-The screenshots document the successful test. A sanitized event JSON, exact monitor source, and Wazuh rule/configuration are still needed for full reproduction.
-
-## Limitations
-
-- Pasting alone does not establish command execution.
-- Benign terminal pastes may produce the same behavioral event; severity depends on content and corroborating telemetry.
-- The monitor must be running, and the Wazuh agent must collect the Application log for this signal to reach the SIEM.
-- This README describes the observed lab flow; it does not substitute for the original source code and rules.
-
-## Suggested MITRE ATT&CK mapping
-
-ClickFix typically uses user interaction and command execution. Map the *observed behavior* to the relevant ATT&CK technique only after confirming which terminal, command, and execution path occurred. The paste event by itself supports investigation of a social engineering workflow, not a confirmed execution technique.
-
-## Project status
-
-**Endpoint event and Wazuh alert verified in the lab.** Screenshot evidence is published. Source and rule files are pending publication.
+The lab produced a Windows warning event and a corresponding Wazuh alert for the ClickFix-style terminal-paste test. The source, project file, collection fragment, and six screenshots are available here for review. A confirmed MITRE ATT&CK execution mapping would require separate evidence that a pasted command actually ran.

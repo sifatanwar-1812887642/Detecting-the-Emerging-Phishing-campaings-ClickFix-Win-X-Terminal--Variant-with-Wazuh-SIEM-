@@ -1,0 +1,7 @@
+<!-- Add this localfile block inside the existing <ossec_config> section
+     of C:\Program Files (x86)\ossec-agent\ossec.conf on the Windows endpoint.
+     Do not replace the rest of the agent configuration. -->
+<localfile>
+  <location>Application</location>
+  <log_format>eventchannel</log_format>
+</localfile>

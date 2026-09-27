@@ -1,0 +1,19 @@
+<group name="windows,clickfix,terminal_paste,">
+
+  <rule id="110201" level="12">
+    <if_sid>60601</if_sid>
+
+    <field name="win.system.providerName" type="pcre2">^ClickFixWinXMonitor$</field>
+    <field name="win.system.eventID" type="pcre2">^2001$</field>
+
+    <description>ClickFix suspicious command pasted into Windows Terminal</description>
+
+    <mitre>
+      <id>T1059.001</id>
+      <id>T1204.004</id>
+    </mitre>
+
+    <group>clickfix,windows_terminal,suspicious_paste,</group>
+  </rule>
+
+</group>

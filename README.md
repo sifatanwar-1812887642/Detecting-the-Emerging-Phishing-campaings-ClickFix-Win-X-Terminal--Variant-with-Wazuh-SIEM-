@@ -13,7 +13,7 @@ This lab reproduces the user-interaction stage of a ClickFix-style lure: the use
 | [`src/ClickFixWinXMonitor/Program.cs`](src/ClickFixWinXMonitor/Program.cs) | Original endpoint monitor source supplied during this lab |
 | [`src/ClickFixWinXMonitor/ClickFixWinXMonitor.csproj`](src/ClickFixWinXMonitor/ClickFixWinXMonitor.csproj) | .NET 8 Windows project and EventLog dependency |
 | [`config/wazuh-agent-ossec-fragment.xml`](config/wazuh-agent-ossec-fragment.xml) | Application event-channel collection block for the Windows agent |
-| [`evidence/`](evidence/) | Six screenshots of the monitor, Event Viewer, and Wazuh |
+| [`evidence/`](evidence/) | Eleven screenshots covering the lure, Win+X menu, build, monitor, Event Viewer, and Wazuh |
 
 ## Lab environment
 
@@ -26,6 +26,16 @@ This lab reproduces the user-interaction stage of a ClickFix-style lure: the use
 | Event source / channel / ID | `ClickFixWinXMonitor` / `Application` / `2001` |
 | Detection phase | Terminal paste before execution |
 
+## Step 0 — Scenario shown in the lab
+
+A browser page presented a verification-style prompt with keyboard instructions. The user followed the **Win+X → I → Ctrl+V** path on the Windows endpoint. These are screenshots of the test setup, not an instruction to visit or trust the pictured page:
+
+![Verification-style ClickFix page](evidence/clickfix-verification-instructions.png)
+
+![Win+X terminal selection](evidence/win-x-terminal-menu.png)
+
+[Original page screenshot](evidence/clickfix-lure-page.png)
+
 ## Step 1 — Prepare the Windows monitor project
 
 On the Windows test endpoint, open **PowerShell as Administrator** and create the project directory:
@@ -37,9 +47,16 @@ dotnet new console --framework net8.0
 dotnet add package System.Diagnostics.EventLog --version 8.0.1
 ```
 
-Replace the generated `Program.cs` and project file with the two files from [`src/ClickFixWinXMonitor/`](src/ClickFixWinXMonitor/). The project targets `net8.0-windows` and enables Windows Forms for clipboard access. The source is the uploaded lab snapshot; the project file expresses its required target and package.
+Replace the generated `Program.cs` and project file with the two files from [`src/ClickFixWinXMonitor/`](src/ClickFixWinXMonitor/). The project targets `net8.0-windows` and enables Windows Forms for clipboard access. The source and project settings are transcribed from the supplied Win+X lab document.
 
-Register the custom Windows event source once with elevated PowerShell:
+Restore and build in the project directory:
+
+```powershell
+dotnet restore
+dotnet build
+```
+
+The lab guide records **Build succeeded, 0 warnings, 0 errors**. Register the custom Windows event source once with elevated PowerShell:
 
 ```powershell
 if (-not [System.Diagnostics.EventLog]::SourceExists('ClickFixWinXMonitor')) {
@@ -51,7 +68,7 @@ if (-not [System.Diagnostics.EventLog]::SourceExists('ClickFixWinXMonitor')) {
 
 ```powershell
 Set-Location C:\ClickFixWinXAgent\ClickFixWinXMonitor
-dotnet publish -c Release -r win-x64 --self-contained true
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
 Set-Location .\bin\Release\net8.0-windows\win-x64\publish
 .\ClickFixWinXMonitor.exe
 ```
@@ -60,7 +77,15 @@ The monitor prints its running status, Event ID `2001`, minimum risk score `2`, 
 
 **Build evidence:** ![Successful publish output](evidence/monitor-build-success.png)
 
-## Step 3 — Reproduce a harmless terminal-paste test
+## Step 3 — Run the lab checks
+
+**Numeric test:** Copy `105567241`, press Win+X → I, and paste with Ctrl+V without pressing Enter. The code scores a 2–15 digit value as `MEDIUM` with score `2`, producing Event ID `2001`.
+
+**Benign test:** Copy `hello` and paste into the terminal. It should report no suspicious indicator and should not write Event ID `2001`.
+
+**Command-indicator test:** Copy `powershell -nop -w hidden https://example.invalid/test` and paste without pressing Enter. This synthetic string matches several indicators. Do not execute it.
+
+For a shorter command-like test:
 
 1. Copy harmless test text such as `cmd /c echo ClickFix-Test`. The string scores `2` through the monitor's `cmd /c` indicator. **Copy only; do not run the command.**
 2. Press **Win+X → I** to open the terminal on the test endpoint.
@@ -76,6 +101,16 @@ The original lab screenshot used a command-like sample with `iex` and a download
 The code also detects 2–15 digit clipboard-only values, possible encoded PowerShell, download plus execution patterns, and simple obfuscation indicators. A match is a triage signal; an analyst must review false positives.
 
 ## Step 4 — Verify the Windows Application event
+
+For a PowerShell check:
+
+```powershell
+Get-WinEvent -FilterHashtable @{
+    LogName      = 'Application'
+    ProviderName = 'ClickFixWinXMonitor'
+    Id           = 2001
+} -MaxEvents 5 | Format-List TimeCreated, ProviderName, Id, LevelDisplayName, Message
+```
 
 Open **Event Viewer → Windows Logs → Application** and filter for **Event ID 2001** or source `ClickFixWinXMonitor`. Open a matching warning and inspect the target process, paste method, detection stage, reason, risk score, timestamp, and host. The event message also records a truncated clipboard preview and SHA-256 hash, so avoid putting secrets in the clipboard during testing.
 
@@ -100,7 +135,19 @@ Get-Service -Name wazuh
 
 The fragment in this repository is a collection example that matches the observed `Application` channel. Preserve the endpoint's other localfile entries. The exact full `ossec.conf` from the lab was not retained here.
 
-## Step 6 — Verify the Wazuh alert
+## Step 6 — Add the custom Wazuh rule on the manager
+
+The supplied lab guide places [`clickfix_win_x_rules.xml`](config/clickfix_win_x_rules.xml) at `/var/ossec/etc/rules/clickfix_win_x_rules.xml`. It matches provider `ClickFixWinXMonitor` and Event ID `2001`, inherits Windows event rule `60601`, and raises custom rule **110201** at level **12**. The rule contains ATT&CK IDs `T1059.001` and `T1204.004` as lab metadata; the paste alone does not prove PowerShell execution.
+
+```bash
+sudo /var/ossec/bin/wazuh-analysisd -t
+sudo systemctl restart wazuh-manager
+sudo systemctl is-active wazuh-manager
+```
+
+Run the syntax check before restarting. Preserve other custom rules on the manager.
+
+## Step 7 — Verify the Wazuh alert
 
 In the Wazuh dashboard, search the alert events for endpoint agent `002`, Event ID `2001`, or provider `ClickFixWinXMonitor`. Open the document and verify:
 
@@ -117,7 +164,9 @@ In the Wazuh dashboard, search the alert events for endpoint agent `002`, Event 
 | [Wazuh document details](evidence/wazuh-alert-document-details.png) | Agent `002`, host, Application channel, Event ID `2001`, message |
 | [Wazuh alert fields](evidence/wazuh-alert-fields.png) | Provider `ClickFixWinXMonitor`, warning severity, event-channel decoder |
 
-The dashboard screenshots show a matching alert. The exact lab-side custom Wazuh rule XML is **not available**, so this repository does not claim a reproducible custom rule ID.
+The supplied alert JSON confirms rule **110201**, level **12**, description **ClickFix suspicious command pasted into Windows Terminal**, agent `002`, and Event ID `2001`.
+
+![Wazuh custom rule details](evidence/wazuh-rule-110201-details.png)
 
 ## Detection logic and boundaries
 
@@ -141,4 +190,4 @@ Win+X → terminal → paste
 
 ## Outcome
 
-The lab produced a Windows warning event and a corresponding Wazuh alert for the ClickFix-style terminal-paste test. The source, project file, collection fragment, and six screenshots are available here for review. A confirmed MITRE ATT&CK execution mapping would require separate evidence that a pasted command actually ran.
+The lab produced a Windows warning event and a corresponding Wazuh alert for the ClickFix-style terminal-paste test. The original monitor source, project settings, manager rule 110201, agent collection fragment, and eleven screenshots are available here. A confirmed MITRE ATT&CK execution finding requires separate evidence that the pasted command actually ran.

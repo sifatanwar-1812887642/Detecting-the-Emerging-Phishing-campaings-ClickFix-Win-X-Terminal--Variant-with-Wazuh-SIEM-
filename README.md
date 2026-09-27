@@ -13,6 +13,7 @@ This lab reproduces the user-interaction stage of a ClickFix-style lure: the use
 | [`src/ClickFixWinXMonitor/Program.cs`](src/ClickFixWinXMonitor/Program.cs) | Original endpoint monitor source supplied during this lab |
 | [`src/ClickFixWinXMonitor/ClickFixWinXMonitor.csproj`](src/ClickFixWinXMonitor/ClickFixWinXMonitor.csproj) | .NET 8 Windows project and EventLog dependency |
 | [`config/wazuh-agent-ossec-fragment.xml`](config/wazuh-agent-ossec-fragment.xml) | Application event-channel collection block for the Windows agent |
+| [`config/clickfix_win_x_rules.xml`](config/clickfix_win_x_rules.xml) | Custom Wazuh rule `110201` from the lab guide |
 | [`evidence/`](evidence/) | Eleven screenshots covering the lure, Win+X menu, build, monitor, Event Viewer, and Wazuh |
 
 ## Lab environment
@@ -75,7 +76,7 @@ Set-Location .\bin\Release\net8.0-windows\win-x64\publish
 
 The monitor prints its running status, Event ID `2001`, minimum risk score `2`, numeric range **2–15 digits**, and supported paste shortcuts **Ctrl+V** and **Shift+Insert**. It checks the foreground process against Windows Terminal, PowerShell, pwsh, cmd, and conhost.
 
-**Build evidence:** ![Successful publish output](evidence/monitor-build-success.png)
+**Build evidence:** ![Successful dotnet build output](evidence/monitor-build-success.png)
 
 ## Step 3 — Run the lab checks
 

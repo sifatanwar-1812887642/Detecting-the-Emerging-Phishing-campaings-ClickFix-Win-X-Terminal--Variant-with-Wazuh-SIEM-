@@ -494,8 +494,13 @@ internal class Program
                 ", ",
                 matchedIndicators);
 
+        string detectionTime =
+            DateTime.Now.ToString(
+                "yyyy-MM-dd HH:mm:ss.fff");
+
         string eventMessage = $"""
 ClickFix Win X Terminal Paste Detection
+Detection Time: {detectionTime}
 Target Process: {processName}
 Paste Method: {pasteMethod}
 Detection Stage: Pre-Execution Paste
@@ -504,12 +509,11 @@ Detection Reason: {detectionReason}
 Risk Level: {riskLevel}
 Risk Score: {riskScore}
 Matched Indicators: {detectionReason}
-Clipboard Text: {textForLog}
-Clipboard Length: {clipboardText.Length}
-Clipboard SHA256: {clipboardHash}
+Pasted Command: {textForLog}
+Command Length: {clipboardText.Length}
+Command SHA256: {clipboardHash}
 Hostname: {Environment.MachineName}
 Username: {Environment.UserName}
-Timestamp: {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}
 Description: Suspicious ClickFix-style content was pasted into a monitored Windows terminal.
 Detection Source: ClickFixWinXMonitor
 """;
@@ -540,6 +544,9 @@ Detection Source: ClickFixWinXMonitor
                 $"Event ID          : {EventId}");
 
             Console.WriteLine(
+                $"Detection Time    : {detectionTime}");
+
+            Console.WriteLine(
                 $"Target Process    : {processName}");
 
             Console.WriteLine(
@@ -556,6 +563,12 @@ Detection Source: ClickFixWinXMonitor
 
             Console.WriteLine(
                 $"Matched Indicators: {detectionReason}");
+
+            Console.WriteLine(
+                $"Pasted Command    : {textForLog}");
+
+            Console.WriteLine(
+                $"Command SHA256    : {clipboardHash}");
 
             Console.WriteLine(
                 "============================================");

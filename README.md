@@ -16,6 +16,22 @@ A step-by-step Windows and Wazuh lab showing how a ClickFix-style **Win+X → Te
 
 **Prerequisites:** .NET 8 SDK, an elevated PowerShell window on Windows, a connected Wazuh Windows agent, and access to the Wazuh manager. Use an isolated test machine and synthetic clipboard values.
 
+## What the detection monitor can detect
+
+The [C# monitor](src/ClickFixWinXMonitor/Program.cs) checks the clipboard **when Ctrl+V or Shift+Insert is pressed in a foreground terminal**. It supports Windows Terminal, PowerShell, pwsh, cmd, and conhost. Empty clipboard text and pastes into other apps are ignored. Each paste is scored, and **Event ID 2001 is written only when the risk score reaches at least 2**.
+
+| Detection category | What it looks for |
+| --- | --- |
+| Numeric ClickFix value | Clipboard text consisting entirely of **2–15 digits**, such as `105567241`; adds score `2`. A single digit is outside the current rule. |
+| PowerShell or shell indicators | `powershell`, `powershell.exe`, `pwsh`, `cmd /c`, `-nop`, `-noprofile`, `-enc`, `-encodedcommand`, `executionpolicy bypass`, `-ep bypass`, `-w hidden`, `windowstyle hidden`. |
+| Download and execution tools | `Invoke-WebRequest`, `Invoke-RestMethod`, `DownloadString`, `DownloadFile`, `curl`, `wget`, `certutil`, `bitsadmin`, `mshta`, `rundll32`, `regsvr32`, `start-process`, `iex`, and `invoke-expression`. |
+| Encoded PowerShell | PowerShell or pwsh with `-enc` / `-encodedcommand` followed by a long Base64-like argument; adds a separate score `4`. |
+| Download plus execution chain | Both a download or URL indicator **and** an execution indicator in the same pasted text; adds score `4`. |
+| Possible obfuscation | At least six of `^`, backtick, braces, or brackets, or a Base64-like sequence of at least 80 characters; adds score `3`. |
+| Other contextual strings | `http://`, `https://`, `%temp%`, `\\appdata\\`, and `frombase64string` contribute to the score. |
+
+The monitor adds weights for matched indicators. Scores **2–4 = MEDIUM**, **5–7 = HIGH**, and **8 or more = CRITICAL**. An Event ID 2001 includes the target process, paste method, matched indicators, risk score, time, host, a command preview capped at 2,048 characters, and the clipboard text's SHA-256 hash. A normal value such as `hello` has no matching indicator and produces no alert. Some legitimate administrative commands can match, so an analyst must review the event.
+
 ## Step 1 — See the simulated ClickFix instruction
 
 The test page displayed a verification-style instruction. The lab user opened the terminal with **Win+X → I**, then pasted with **Ctrl+V**. You do not need to visit the pictured page to repeat the detection test; Step 4 provides harmless values.

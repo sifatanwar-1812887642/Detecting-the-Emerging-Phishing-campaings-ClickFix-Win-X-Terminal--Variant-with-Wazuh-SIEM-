@@ -32,7 +32,7 @@ The agent was developed under `C:\ClickFixWinXAgent\ClickFixWinXMonitor` with `S
 3. Wazuh agent `002` forwarded the event to the manager.
 4. A corresponding Wazuh alert was visible in the dashboard.
 
-The monitor was exercised with command-like text and numeric clipboard content. The event reports the observed paste; an analyst must assess the content and surrounding process activity. The exact published `Program.cs`, Wazuh configuration/rule XML, and screenshots should be added from the lab artifacts so the repository can serve as a reproducible implementation.
+The monitor was exercised with command-like text and numeric clipboard content. The event reports the observed paste; an analyst must assess the content and surrounding process activity. The exact published `Program.cs` and Wazuh configuration/rule XML should be added from the lab artifacts so the repository can serve as a reproducible implementation.
 
 ## Reproduction outline
 
@@ -46,12 +46,32 @@ The monitor was exercised with command-like text and numeric clipboard content. 
 5. Check Event Viewer → Windows Logs → Application for Event ID `2001`.
 6. Search the Wazuh dashboard for the same event and confirm the endpoint agent and timestamp.
 
-## Evidence to add
+## Detection evidence
 
-- Endpoint Event Viewer screenshot showing Event ID `2001`.
-- Wazuh alert screenshot showing the Windows endpoint agent and event details.
-- Sanitized example event JSON (remove user names, tokens, and unrelated clipboard content).
-- The exact monitor source and Wazuh rule/configuration used in the successful test.
+The following screenshots are from the lab test. They show the endpoint observation, Event Viewer entry, and Wazuh alert. Some frames also contain a test command; do not execute clipboard content from screenshots.
+
+| Step | Screenshot |
+| --- | --- |
+| Endpoint monitor detects a terminal paste | [Monitor detection](evidence/endpoint-monitor-detection.png) |
+| Terminal and monitor together | [Terminal paste](evidence/terminal-paste-monitor.png) |
+| Windows Application Event ID 2001 | [Event Viewer](evidence/windows-event-viewer-2001.png) |
+| Alert appears in Wazuh | [Wazuh alerts overview](evidence/wazuh-alerts-overview.png) |
+| Wazuh agent and event fields | [Wazuh document details](evidence/wazuh-alert-document-details.png) |
+| Additional Wazuh event fields | [Wazuh alert fields](evidence/wazuh-alert-fields.png) |
+
+### Endpoint detection
+
+![Terminal paste detected by the endpoint monitor](evidence/terminal-paste-monitor.png)
+
+### Windows Event Viewer
+
+![Windows Application Event ID 2001](evidence/windows-event-viewer-2001.png)
+
+### Wazuh SIEM alert
+
+![ClickFix paste alert in Wazuh](evidence/wazuh-alerts-overview.png)
+
+The screenshots document the successful test. A sanitized event JSON, exact monitor source, and Wazuh rule/configuration are still needed for full reproduction.
 
 ## Limitations
 
@@ -66,4 +86,4 @@ ClickFix typically uses user interaction and command execution. Map the *observe
 
 ## Project status
 
-**Endpoint event and Wazuh alert verified in the lab.** Source, rule, and evidence files are pending publication.
+**Endpoint event and Wazuh alert verified in the lab.** Screenshot evidence is published. Source and rule files are pending publication.

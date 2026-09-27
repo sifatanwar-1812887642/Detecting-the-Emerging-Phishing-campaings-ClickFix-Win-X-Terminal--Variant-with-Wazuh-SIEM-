@@ -1,8 +1,18 @@
 # ClickFix Win+X Terminal-Paste Detection with Wazuh SIEM
 
-A step-by-step Windows and Wazuh lab showing how a ClickFix-style **Win+X → Terminal → Ctrl+V** instruction can be observed and alerted on. The endpoint tool records a suspicious paste as **Windows Application Event ID 2001**; a custom Wazuh rule raises **alert 110201**.
+## What is ClickFix?
 
-**What the demonstration proves:** suspicious text was pasted into a monitored terminal, Event ID 2001 was written, and Wazuh received an alert. The tool does not independently record the Win+X keypress or prove that the pasted command executed.
+ClickFix is a social engineering technique that presents a fake error, verification, or repair prompt and persuades a person to copy and paste a command into a Windows command interface. The page may make the action look like a normal way to solve a problem. If the person runs the pasted command, it can download and launch unwanted software. The critical step is the user's own paste and execution, which can make the activity look less like a conventional file download. [Microsoft Threat Intelligence](https://www.microsoft.com/en-us/security/blog/2025/08/21/think-before-you-clickfix-analyzing-the-clickfix-social-engineering-technique/) documents this behavior; MITRE ATT&CK describes the related [Malicious Copy and Paste technique (T1204.004)](https://attack.mitre.org/techniques/T1204/004/).
+
+## What is the Win+X terminal variant?
+
+In the workflow reproduced here, the prompt tells the user to press **Win+X**, choose **Terminal** (the lab used **I**), and paste with **Ctrl+V**. This moves the suspicious text directly into Windows Terminal instead of the more familiar Win+R Run dialog. The lab screenshots show the verification prompt, terminal selection, endpoint observation, Windows event, and Wazuh alert. The pasted sample in the evidence contained a download-and-execution pattern; **do not run the pictured command**.
+
+## Why we built this project
+
+We wanted a repeatable way for the Cyber Range Fusion Center to observe this user-action stage **before command execution** and send the evidence to Wazuh. Our C# monitor checks a terminal paste, scores indicators in the clipboard text, and writes suspicious observations to the Windows Application log as **Event ID 2001**. Wazuh collects that event and custom **rule 110201** raises a level-12 alert for analyst review.
+
+**What the demonstration proves:** suspicious text was pasted into a monitored terminal, Event ID 2001 was written, and Wazuh received an alert. The monitor does not independently record the Win+X keypress or prove that the pasted command executed.
 
 ## At a glance
 
